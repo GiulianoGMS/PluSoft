@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE CONSINCO.NAGP_EXPVDA_PLUSOFT_V2 (vsDtaInicial DATE, vsDtaFinal DATE) IS
+CREATE OR REPLACE PROCEDURE NAGP_EXPVDA_PLUSOFT_V2 (vsDtaInicial DATE, vsDtaFinal DATE) IS
 
     v_file UTL_FILE.file_type;
     v_line VARCHAR2(32767);
@@ -84,7 +84,7 @@ BEGIN
                                                                    VD.IDFORMAPAGTO,
                                                                    VD.TXTFORMAPAGTO 
                                                                                          
-                                                                      FROM CONSINCO.NAGV_PLUSOFT_VENDAS VD 
+                                                                      FROM CONSINCO.NAGV_PLUSOFT_VENDAS_VG VD 
                                                                      WHERE VD.DATA BETWEEN t.DTA_INICIAL AND t.DTA_FINAL)
 
       LOOP
@@ -102,7 +102,13 @@ BEGIN
         END IF;
         
     END LOOP;
-
+    
+    -- Grava o restante do buffer no final (burro esqueceu)
+    IF v_buffer IS NOT NULL THEN
+        UTL_FILE.put_line(v_file, v_buffer);
+        v_buffer := '';
+    END IF;
+    
     -- Fecha o arquivo
     UTL_FILE.fclose(v_file);
 
