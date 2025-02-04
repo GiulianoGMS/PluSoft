@@ -12,41 +12,57 @@ CREATE OR REPLACE PROCEDURE NAGP_EXPVDA_PLUSOFT_V2 (vsDtaInicial DATE, vsDtaFina
 BEGIN
 
     FOR t IN (SELECT X.ANOMESDESCRICAO,
-                   MIN(TO_DATE(LAST_DAY(ADD_MONTHS(X.DTA, -1)) + 1, 'DD/MM/RRRR')) DTA_INICIAL,
-                   MAX(TO_DATE(LAST_DAY(X.DTA), 'DD/MM/RRRR')) DTA_FINAL
-              FROM DIM_TEMPO X
-             WHERE X.DTA BETWEEN vsDtaInicial AND vsDtaFinal
-             GROUP BY X.ANOMESDESCRICAO
-             ORDER BY 2)
+                     MIN(TO_DATE(LAST_DAY(ADD_MONTHS(X.DTA, -1)) + 1, 'DD/MM/RRRR')) DTA_INICIAL,
+                     MAX(TO_DATE(LAST_DAY(X.DTA), 'DD/MM/RRRR')) DTA_FINAL
+                FROM DIM_TEMPO X
+               WHERE X.DTA BETWEEN vsDtaInicial AND vsDtaFinal
+               GROUP BY X.ANOMESDESCRICAO
+               ORDER BY 2)
 
     LOOP
-          
+    /* A tabela abaixo irá agrupar os CPFs/CNPJs para serem utilizados na view que gera os arquivos */
     BEGIN
       
-    DELETE FROM CONSINCO.NAGT_TMP_PLUSOFT WHERE 1=1;
+    DELETE FROM NAGT_TMP_PLUSOFT WHERE 1=1;
     COMMIT;
       
     INSERT /*+ APPEND */ INTO CONSINCO.NAGT_TMP_PLUSOFT 
-    
+    /* Cupom PDV Remarca */
     SELECT /*+OPTIMIZER_FEATURES_ENABLE('11.2.0.4')*/
-     (Z.CPFCNPJ), X.SEQNF, X.NROEMPRESA, X.DTAMOVIMENTO
-      FROM MFL_DOCTOFISCAL X INNER JOIN PDV_DOCTO Y ON X.NFECHAVEACESSO = Y.CHAVEACESSO
-                                                   AND Y.DTAMOVIMENTO = X.DTAMOVIMENTO
-                                                   AND X.NROEMPRESA = Y.NROEMPRESA
-                                                   AND X.NUMERODF = Y.NUMERODF
-                                                   AND X.SERIEDF = Y.SERIEDF
-                             INNER JOIN PDV_DESCONTO Z ON (Z.SEQDOCTO = Y.SEQDOCTO)
+           Z.CPFCNPJ CPF, X.SEQNF, X.NROEMPRESA, X.DTAMOVIMENTO, NVL(NAGF_ECOMM_CANALVENDA(X.NROEMPRESA, X.NUMERODF, X.DTAMOVIMENTO), P.PEDIDOID) PEDIDOID
+      FROM MFL_DOCTOFISCAL X  INNER JOIN PDV_DOCTO Y ON X.NFECHAVEACESSO = Y.CHAVEACESSO
+                                                    AND Y.DTAMOVIMENTO = X.DTAMOVIMENTO
+                                                    AND X.NROEMPRESA = Y.NROEMPRESA
+                                                    AND X.NUMERODF = Y.NUMERODF
+                                                    AND X.SERIEDF = Y.SERIEDF
+                              INNER JOIN PDV_DESCONTO Z ON (Z.SEQDOCTO = Y.SEQDOCTO)
+                               LEFT JOIN MAD_PEDVENDA P ON P.NROPEDVENDA = X.NROPEDIDOVENDA
                              
-    WHERE X.DTAMOVIMENTO BETWEEN T.DTA_INICIAL AND T.DTA_FINAL
+    WHERE X.DTAMOVIMENTO BETWEEN t.DTA_INICIAL AND t.DTA_FINAL
+      AND X.CODGERALOPER IN (37,48,123,610,615,613,810,916,910,911,76)
+      AND X.SEQPESSOA > 999
     
-    UNION ALL
-    
+    UNION
+    /* Cupom PDV TOTVS */
     SELECT /*+OPTIMIZER_FEATURES_ENABLE('11.2.0.4')*/
-     TO_NUMBER(XDF.CNPJCPF), X.SEQNF, X.NROEMPRESA, X.DTAMOVIMENTO
-      FROM MFL_DOCTOFISCAL X INNER JOIN MFL_DOCTOFIDELIDADE XDF ON XDF.SEQNF = X.SEQNF
-                             
-    WHERE X.DTAMOVIMENTO BETWEEN T.DTA_INICIAL AND T.DTA_FINAL
-    ;                   
+           TO_NUMBER(XDF.CNPJCPF) CPF, X.SEQNF, X.NROEMPRESA, X.DTAMOVIMENTO, NVL(NAGF_ECOMM_CANALVENDA(X.NROEMPRESA, X.NUMERODF, X.DTAMOVIMENTO), P.PEDIDOID) PEDIDOID 
+      FROM MFL_DOCTOFISCAL X  INNER JOIN MFL_DOCTOFIDELIDADE XDF ON XDF.SEQNF = X.SEQNF
+                               LEFT JOIN MAD_PEDVENDA P ON P.NROPEDVENDA = X.NROPEDIDOVENDA
+                              
+    WHERE X.DTAMOVIMENTO BETWEEN t.DTA_INICIAL AND t.DTA_FINAL
+      AND X.CODGERALOPER IN (37,48,123,610,615,613,810,916,910,911,76)
+      AND X.SEQPESSOA > 999
+    
+    UNION
+    /* Notas sem cupom */
+    SELECT TO_NUMBER(G.NROCGCCPF||G.DIGCGCCPF) CPF, X.SEQNF, X.NROEMPRESA, X.DTAMOVIMENTO, PEDIDOID
+      FROM MFL_DOCTOFISCAL X INNER JOIN GE_PESSOA G ON G.SEQPESSOA = X.SEQPESSOA
+                             INNER JOIN MAD_PEDVENDA P ON P.NROPEDVENDA = X.NROPEDIDOVENDA
+      
+     WHERE X.DTAMOVIMENTO BETWEEN t.DTA_INICIAL AND t.DTA_FINAL
+       AND X.CODGERALOPER IN (37,48,123,610,615,613,810,916,910,911,76)
+       AND X.SEQPESSOA > 999;
+                       
     COMMIT;
         
     END;
@@ -54,7 +70,7 @@ BEGIN
     V_Periodo := REPLACE(t.ANOMESDESCRICAO, '/','_');
 
     -- Abre o arquivo para escrita
-    v_file := UTL_FILE.fopen('/u02/app_acfs/arquivos/plusoft', 'Ext_v2_Vda_'||v_Periodo||'.csv', 'w', 32767);
+    v_file := UTL_FILE.fopen('/u02/app_acfs/arquivos/plusoft', 'Ext_v3_Vda_'||v_Periodo||'.csv', 'w', 32767);
 
     -- Pega o nome das colunas para inserir no cabecalho pq tenho preguica
     SELECT LISTAGG(COLUMN_NAME,';') WITHIN GROUP (ORDER BY COLUMN_ID)
@@ -84,7 +100,7 @@ BEGIN
                                                                    VD.IDFORMAPAGTO,
                                                                    VD.TXTFORMAPAGTO 
                                                                                          
-                                                                      FROM CONSINCO.NAGV_PLUSOFT_VENDAS_VG VD 
+                                                                      FROM CONSINCO.NAGV_PLUSOFT_VENDAS_EXT VD 
                                                                      WHERE VD.DATA BETWEEN t.DTA_INICIAL AND t.DTA_FINAL)
 
       LOOP
@@ -96,7 +112,7 @@ BEGIN
         v_buffer := v_buffer || v_line || CHR(10); -- Adiciona nova linha ao buffer
         
         IF LENGTH(v_buffer) > v_chunk_size THEN
-            UTL_FILE.put_line(v_file, v_buffer); -- Escreva o buffer no arquivo
+            UTL_FILE.put_line(v_file, v_buffer); -- Escreve o buffer no arquivo
             v_buffer := ''; -- Limpe o buffer
             
         END IF;
