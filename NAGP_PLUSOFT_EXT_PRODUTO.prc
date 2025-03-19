@@ -12,7 +12,7 @@ CREATE OR REPLACE PROCEDURE CONSINCO.NAGP_PLUSOFT_EXT_PRODUTO IS
 
 BEGIN
   
-    SELECT REPLACE(TO_CHAR(SYSDATE, 'DD/MM'),'/','_') 
+    SELECT REPLACE(TO_CHAR(SYSDATE-1, 'DD/MM'),'/','_') 
       INTO v_Periodo
       FROM DUAL;
     -- Abre o arquivo para escrita
