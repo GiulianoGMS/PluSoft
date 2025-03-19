@@ -12,14 +12,14 @@ CREATE OR REPLACE PROCEDURE CONSINCO.NAGP_PLUSOFT_EXT_VENDAS IS
 
 BEGIN
   
-    SELECT REPLACE(TO_CHAR(SYSDATE, 'DD/MM'),'/','_') 
+    SELECT REPLACE(TO_CHAR(SYSDATE -1, 'DD/MM'),'/','_') 
       INTO v_Periodo
       FROM DUAL;
     -- Abre o arquivo para escrita
     v_file := UTL_FILE.fopen('/u02/app_acfs/arquivos/plusoft', 'Ext_Plusoft_Vendas_'||v_Periodo||'.csv', 'w', 32767);
 
     -- Pega o nome das colunas para inserir no cabecalho pq tenho preguica
-    SELECT LISTAGG(COLUMN_NAME,';') WITHIN GROUP (ORDER BY COLUMN_ID)
+    SELECT LISTAGG(COLUMN_NAME,';') WITHIN GROUP (ORDER BY COLUMN_ID)-- ||';DATA'
       INTO v_Cabecalho
       FROM ALL_TAB_COLUMNS@CONSINCODW A
      WHERE A.table_name = 'NAGV_PLUSOFT_VENDAS'
@@ -40,11 +40,11 @@ BEGIN
       FOR vda IN (SELECT *                                           
                     FROM NAGV_PLUSOFT_VENDAS@CONSINCODW X
                    WHERE 1=1 
-                    AND DATA = TRUNC(SYSDATE) -1)
+                    AND TRUNC(DATA) = TRUNC(SYSDATE) -1)
 
       LOOP
 
-      v_line := vda.IDPESSOA||';'||vda.IDFILIAL||';'||vda.IDCUPOM||';'||vda.IDPRODUTO||';'||vda.DATVENDA||';'||vda.NUMQTDVENDIDA||';'||vda.VLRPRECOVENDAUNITARIO||';'||vda.VLRPRECOPDVUNITARIO||';'||vda.VLRDESCONTOUNITARIO||';'||vda.VLRMARGEMPDV||';'||vda.TXTCANALVENDAS||';'||vda.TXTTIPOVENDA||';'||vda.IDFORMAPAGTO||';'||vda.TXTFORMAPAGTO;
+      v_line := vda.IDPESSOA||';'||vda.IDFILIAL||';'||vda.IDCUPOM||';'||vda.IDPRODUTO||';'||vda.DATVENDA||';'||vda.NUMQTDVENDIDA||';'||vda.VLRPRECOVENDAUNITARIO||';'||vda.VLRPRECOPDVUNITARIO||';'||vda.VLRDESCONTOUNITARIO||';'||vda.VLRMARGEMPDV||';'||vda.TXTCANALVENDAS||';'||vda.TXTTIPOVENDA||';'||vda.IDFORMAPAGTO||';'||vda.TXTFORMAPAGTO; --||';'||vda.DATA;
       v_buffer := v_buffer || v_line || CHR(10); -- Adiciona nova linha ao buffer        
         
         IF LENGTH(v_buffer) > v_chunk_size THEN
