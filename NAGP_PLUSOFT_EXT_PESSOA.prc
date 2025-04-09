@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE CONSINCO.NAGP_PLUSOFT_EXT_PESSOA IS
+CREATE OR REPLACE PROCEDURE NAGP_PLUSOFT_EXT_PESSOA IS
 
     v_file UTL_FILE.file_type;
     v_line VARCHAR2(32767);
@@ -16,7 +16,7 @@ BEGIN
       INTO v_Periodo
       FROM DUAL;
     -- Abre o arquivo para escrita
-    v_file := UTL_FILE.fopen('/u02/app_acfs/arquivos/plusoft', 'Ext_Plusoft_Pessoa_'||v_Periodo||'.csv', 'w', 32767);
+    v_file := UTL_FILE.fopen('PLUSOFT', 'Ext_Plusoft_Pessoa_'||v_Periodo||'.csv', 'w', 32767);
 
     -- Pega o nome das colunas para inserir no cabecalho pq tenho preguica
     SELECT LISTAGG(COLUMN_NAME,';') WITHIN GROUP (ORDER BY COLUMN_ID)
@@ -37,8 +37,24 @@ BEGIN
 
     -- Executa a query e escreve os resultados
 
-      FOR vda IN (SELECT *                                           
-                    FROM NAGV_PLUSOFT_PESSOA X
+      FOR vda IN ( SELECT IDPESSOA,
+                          TXTNOMECOMPLETO,
+                          TXTESTADOCIVIL,
+                          TXTSEXO,
+                          DATNASCIMENTO,
+                          DATULTCOMPRA,
+                          DATATUALIZACAOCADASTRO,
+                          DATCADASTRO,
+                          NUMCEL1,
+                          NUMCEL2,
+                          NUMTELFIXO,
+                          NUMTELCOMERCIAL,
+                          TXTEMAIL,
+                          TXTENDERECO,
+                          TXTBAIRRO,
+                          TXTCIDADE,
+                          ESTADO                                   
+                    FROM NAGV_PLUSOFT_PESSOA_ext@CONSINCODW X
                    WHERE 1=1 
                      AND TRUNC(DATATUALIZACAOCADASTRO) = TRUNC(SYSDATE) -1) 
 
